@@ -1,36 +1,25 @@
+// validate.js
 import http from 'http';
 import https from 'https';
+import { checkLinkStatus } from './stats.js';
 
-export const validateLink = (link, file) => {
+// ===================================Validation
+export const validateLink = (link) => {
   return new Promise((resolve) => {
     const httpModule = link.startsWith('https') ? https : http;
     const request = httpModule.request(link, { method: 'HEAD' }, (response) => {
+
       const status = response.statusCode;
       const ok = status >= 200 && status < 400;
 
-      // Extraemos el texto del enlace del objeto response
-      const chunks = [];
-      response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => {
-        const text = chunks.join('').trim();
 
-        const linkObj = {
-          href: link,
-          text, // Usamos la variable local 'text'
-          file, // Usamos la variable local 'file'
-          status,
-          ok,
-        };
-
-        resolve(linkObj);
-      });
+      resolve(linkObj);
     });
 
     request.on('error', () => {
       const linkObj = {
         href: link,
-        text: '', // Texto vacío en caso de error
-        file, // Usamos la variable local 'file'
+        text: '',
         status: -1,
         ok: false,
       };
@@ -42,12 +31,18 @@ export const validateLink = (link, file) => {
   });
 };
 
-export const validateLinks = async (links, file) => {
-  const linkPromises = links.map((link) => {
-    return validateLink(link, file);
+export const validateLinks = async (links) => {
+  const promises = []
+  links.map(async (link) => {
+    promises.push(checkLinkStatus(link))
   });
-
-  return Promise.all(linkPromises);
+  return Promise.all(promises).then((responses) => {
+    return responses.map((httpCode, index) => ({...links[index],
+        status: httpCode,
+        ok: httpCode >= 200 && httpCode < 400,
+      }))
+  })
 };
+//console.log(await validateLink('https://www.areatecnologia.com/diagramas-de-flujo.htm'));
 
-export default { validateLinks, validateLink };
+export default {validateLinks, validateLink};
