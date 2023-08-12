@@ -3,14 +3,11 @@ import fs, { read } from 'fs';
 
 // --------------------------Read Files
 const readMdFiles = (mdFilesArray) => {
-  // lee los archivos
-  const fileContents = [];
-  mdFilesArray.forEach((filePath) => {
+  return mdFilesArray.map((filePath) => {
     const readFile = fs.readFileSync(filePath);
     const fileContent = readFile.toString();
-    fileContents.push({fileContent: fileContent, File: filePath});
+    return ({fileContent: fileContent, File: filePath});
   });
-  return fileContents;
 };
 
 // --------------------------Extact Links Object

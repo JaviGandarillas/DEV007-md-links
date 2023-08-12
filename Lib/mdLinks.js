@@ -1,16 +1,15 @@
-import { existsSync, lstatSync } from 'fs';
+import { existsSync, link, lstatSync } from 'fs';
 import { extname, resolve, isAbsolute } from 'path';
 import { extractedMD } from './getFiles.js';
 import { readMdFiles, extractLinks } from './getLinks.js';
-import { stats } from './stats.js';
+import { checkStats, stats, statsOffline } from './stats.js';
 import { validateLinks } from './validate.js';
-import chalk from 'chalk';
 import path from 'path';
 
-const displayLinks = (links, path) => {
+const displayLinks = (links, filePath) => {
   links.forEach((link) => {
     const { href, text, status, ok } = link;
-    console.log(`${chalk.inverse.magenta(path)} ${chalk.cyan(href)} ${ok ? chalk.bgCyan('ok') : chalk.red('fail')}`);
+    console.log(`${chalk.inverse.magenta(filePath)} ${chalk.cyan(href)} ${ok ? chalk.bgCyan('ok') : chalk.red('fail')}`);
   });
 };
 
@@ -23,71 +22,44 @@ export function convertAbsolute(pathUser) {
 
 const mdLinks = async (elPath, options = {}) => {
   const absolutePath = convertAbsolute(elPath);
+  let files = []
   if (existsSync(absolutePath)) {
+
+    /* Validate use cases */
+    if (!lstatSync(absolutePath).isDirectory() && extname(absolutePath) !== '.md') {
+      throw new Error('The path is not a Markdown File or Folder');
+    }
     if (lstatSync(absolutePath).isDirectory()) {
-      const files = extractedMD(absolutePath);
-      const links = await Promise.all(files.map(file => readMdFiles([file])));
-      const extractedLinks = extractLinks(links.flat());
+      files = extractedMD(absolutePath)
 
-      if (options.validate && options.stats) {
-        const validatedLinks = await Promise.all(links.map(link => validateLinks(link)));
-        const statedLinks = await stats(validatedLinks);
-        return { validatedLinks, statedLinks };
-      } else if (options.validate) {
-        const validatedLinks = await validateLinks(extractedLinks)
-        //const validatedLinks = await Promise.all(extractedLinks.map((link, _, linkArr) => validateLinks(link)));
-        return validatedLinks;
-      } else if (options.stats) {
-        const statedLinks = await stats(links);
-        return { statedLinks };
-      } else {
-        return extractedLinks;
+      if (files.length === 0) {
+        throw new Error('No Markdown files found in folder');
       }
-    } else if (extname(absolutePath) === '.md') {
-      const readenLinks = await readMdFiles([absolutePath]);
-      const extractedLinksObj = extractLinks(readenLinks);
+    }
 
-      if (extractedLinksObj.length === 0) {
-        throw new Error('No links found');
-      } else {
-        if (options.stats) {
-          const statedLinks = await stats(extractedLinksObj);
-          return { statedLinks };
-        }
+    if (extname(absolutePath) === '.md') {
+      files = [absolutePath]
+    } 
 
-        if (options.validate) {
-          const validatedLinks = await validateLinks(extractedLinksObj);
-          return { validatedLinks };
-        }
-
-        if (Object.keys(options).length === 0) {
-          return extractedLinksObj;
-        }
-
-        return extractedLinksObj
-      }
+    /* Execute mdLinks checks */
+    const links = readMdFiles(files);
+    const extractedLinks = extractLinks(links);
+    if (options.validate && options.stats) {
+      const validatedLinks = await validateLinks(extractedLinks);
+      const statedLinks = await checkStats(validatedLinks, false)
+      return { validatedLinks, statedLinks };
+    } else if (options.validate) {
+      const validatedLinks = await validateLinks(extractedLinks)
+      return validatedLinks;
+    } else if (options.stats) {
+      const statedLinks = await checkStats(extractedLinks);
+      return statedLinks;
     } else {
-      throw new Error('Invalid file type. Only Markdown files are supported.');
+      return extractedLinks;
     }
   } else {
     throw new Error('Path does not exist.');
   }
 };
-
-//export default mdLinks;
-
-mdLinks('C:/Users/Javiera/Desktop/Laboratoria/MDLinks/DEV007-md-links/Lib/Example/Subexample/README.pt.md', {validate: true })
-  .then((links) => {
-    console.log("links", links);
-    
-   /* term.slowTyping(
-      'DONE!\n',
-      { flashStyle: term.brightWhite },
-      () => { process.exit(); },
-    );*/
-  })
-  .catch((error) => {
-    console.error(error);
-  });
 
 export default mdLinks;
